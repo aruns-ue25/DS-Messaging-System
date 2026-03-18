@@ -54,4 +54,8 @@ public class ServerNode {
             System.out.println(message);
         }
     }
+    
+    public MessageService getMessageService() {
+        return messageService;
+    }
 }

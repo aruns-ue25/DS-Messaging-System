@@ -7,11 +7,13 @@ public class ServerNode {
     private String serverId;
     private boolean active;
     private MessageService messageService;
+    private com.dsmessaging.raft.RaftNode raftNode;
 
     public ServerNode(String serverId) {
         this.serverId = serverId;
         this.active = true;
         this.messageService = new MessageService();
+        this.raftNode = new com.dsmessaging.raft.RaftNode(serverId, this);
     }
 
     public String getServerId() {
@@ -24,12 +26,18 @@ public class ServerNode {
 
     public void deactivate() {
         this.active = false;
+        raftNode.stop();
         System.out.println(serverId + " is now DOWN.");
     }
 
     public void activate() {
         this.active = true;
+        raftNode.start();
         System.out.println(serverId + " is now ACTIVE.");
+    }
+
+    public com.dsmessaging.raft.RaftNode getRaftNode() {
+        return raftNode;
     }
 
     public void receiveMessage(Message message) {
@@ -54,7 +62,7 @@ public class ServerNode {
             System.out.println(message);
         }
     }
-    
+
     public MessageService getMessageService() {
         return messageService;
     }

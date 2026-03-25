@@ -209,11 +209,38 @@ public class ServerNode {
         }
     }
 
+    public void failNode() {
+        this.active = false;
+        System.out.println("Server " + serverId + " FAILED");
+    }
+
+    public void recoverNode() {
+        this.active = true;
+        System.out.println("Server " + serverId + " RECOVERED");
+    }
+
+    public void storeMessage(String messageContent) {
+        if (!active) {
+            System.out.println("Server " + serverId + " is DOWN. Cannot store message.");
+            return;
+        }
+        
+        // Integration with existing complex model for consistency
+        String messageId = java.util.UUID.randomUUID().toString();
+        Message msg = new Message(messageId, "default-conv", "system", "all", "msg-" + System.currentTimeMillis(),
+            messageContent, System.currentTimeMillis(), messageStore.getMaxVersion("default-conv") + 1,
+            MessageStatus.COMMITTED, System.currentTimeMillis());
+            
+        messageStore.saveMessage(msg);
+        System.out.println("Message stored in Server " + serverId + ": " + messageContent);
+    }
+
     // Getters
     public String getServerId() { return serverId; }
+    public String getNodeId() { return serverId; } // Alias for convenience in ClusterManager
     public boolean isActive() { return active; }
-    public void deactivate() { this.active = false; System.out.println(serverId + " is DOWN."); }
-    public void activate() { this.active = true; System.out.println(serverId + " is ACTIVE."); }
+    public void deactivate() { failNode(); }
+    public void activate() { recoverNode(); }
     public MessageStore getMessageStore() { return messageStore; }
     public MetricsCollector getMetrics() { return metrics; }
     public IdempotencyStore getIdempotencyStore() { return idempotencyStore; }

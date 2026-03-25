@@ -33,6 +33,43 @@ public class MessagingSystem {
         throw new IllegalArgumentException("Server not found");
     }
     
+    public void checkNodeHealth() {
+        for (ServerNode node : servers) {
+            if (!node.isActive()) {
+                System.out.println("ClusterManager detected failure in Server " + node.getNodeId());
+            }
+        }
+    }
+
+    private ServerNode getActiveNode() {
+        for (ServerNode node : servers) {
+            if (node.isActive()) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    public void sendMessage(String message) {
+        ServerNode target = getActiveNode();
+
+        if (target == null) {
+            System.out.println("No active servers available!");
+            return;
+        }
+
+        target.storeMessage(message);
+        replicateMessage(target, message);
+    }
+
+    public void replicateMessage(ServerNode source, String message) {
+        for (ServerNode node : servers) {
+            if (node != source && node.isActive()) {
+                node.storeMessage(message);
+            }
+        }
+    }
+    
     public MetricsCollector getGlobalMetrics() {
         return globalMetrics;
     }

@@ -5,6 +5,18 @@ import com.dsmessaging.server.ServerNode;
 import com.dsmessaging.service.MessagingSystem;
 
 public class RaftSimulation {
+
+    private static void sendToLeader(MessagingSystem system, Message msg) {
+        for (ServerNode server : system.getServers()) {
+            if (server.getRaftNode().getState() == com.dsmessaging.raft.NodeState.LEADER) {
+                System.out.println("Routing message to current LEADER: " + server.getServerId());
+                system.sendMessageToServer(server.getServerId(), msg);
+                return;
+            }
+        }
+        System.out.println("No leader found for message: " + msg.getMessageId());
+    }
+
     public static void main(String[] args) throws InterruptedException {
         MessagingSystem system = new MessagingSystem();
 
@@ -28,25 +40,21 @@ public class RaftSimulation {
         // Wait for leader election
         Thread.sleep(1500);
 
-        System.out.println("\n--- Sending Message to Server-1 (Or another node) ---");
+        System.out.println("\n--- Sending Message to Current Leader ---");
         Message msg1 = new Message("msg-1", "Client", "System", "Hello Raft!", System.currentTimeMillis());
-        // For simplicity in simulation we route to s1. If it's leader, it will
-        // replicate.
-        // If not, it complains it's not the leader. Real systems route to current
-        // leader.
-        system.sendMessageToServer("Server-1", msg1);
+        sendToLeader(system, msg1);
 
         Thread.sleep(1000);
 
-        System.out.println("\n--- Simulating Node Crash (Server-1) ---");
+        System.out.println("\n--- Simulating Node Crash (Deactivating Server-1) ---");
         s1.deactivate();
 
         // Wait for potential new election
         Thread.sleep(1500);
 
-        System.out.println("\n--- Sending another message to Server-2 ---");
-        Message msg2 = new Message("msg-2", "Client", "System", "Recovered from failure!", System.currentTimeMillis());
-        system.sendMessageToServer("Server-2", msg2);
+        System.out.println("\n--- Sending another message to Current Leader ---");
+        Message msg2 = new Message("msg-2", "Client", "System", "Testing second message!", System.currentTimeMillis());
+        sendToLeader(system, msg2);
 
         Thread.sleep(1000);
 
@@ -54,7 +62,7 @@ public class RaftSimulation {
         s1.activate();
 
         // Give time for catch up log replication
-        Thread.sleep(1500);
+        Thread.sleep(2000);
 
         System.out.println("\n--- Final State ---");
         system.displayAllServerMessages();

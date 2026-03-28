@@ -7,17 +7,73 @@ option java_outer_classname = "MessagingProto";
 package messaging;
 
 service MessagingService {
-  // RPC for sending a message
+  // RPC for sending a message (Client to Server)
   rpc SendMessage (MessageRequest) returns (MessageResponse);
+
+  // RPC for master-to-replica write (Server to Server)
+  rpc ReceiveReplicaWrite (ReplicaWriteRequest) returns (ReplicaWriteResponse);
+
+  // RPC for committing a message (Server to Server)
+  rpc CommitMessage (CommitRequest) returns (CommitResponse);
+
+  // RPC for reading latest messages (Member 2 requirement)
+  rpc ReadLatest (ReadRequest) returns (ReadResponse);
 
   // RPC for clock synchronization (NTP-like)
   rpc SyncClock (SyncRequest) returns (SyncResponse);
+}
+
+message ReplicaWriteRequest {
+  MessageData message = 1;
+  IdempotencyData idempotency_key = 2;
+}
+
+message ReplicaWriteResponse {
+  bool success = 1;
+}
+
+message CommitRequest {
+  string message_id = 1;
+}
+
+message CommitResponse {
+  bool success = 1;
+}
+
+message ReadRequest {
+  string conversation_id = 1;
+  int32 limit = 2;
+}
+
+message ReadResponse {
+  repeated MessageData messages = 1;
+  int32 max_cluster_version = 2;
+}
+
+message MessageData {
+  string message_id = 1;
+  string conversation_id = 2;
+  string sender_id = 3;
+  string receiver_id = 4;
+  string client_request_id = 5;
+  string content = 6;
+  int64 created_at = 7;
+  int32 commit_version = 8;
+  string status = 9;
+}
+
+message IdempotencyData {
+  string conversation_id = 1;
+  string sender_id = 2;
+  string client_request_id = 3;
 }
 
 message MessageRequest {
   string sender_id = 1;
   string content = 2;
   HLCTimestamp timestamp = 3;
+  string conversation_id = 4;
+  string client_request_id = 5;
 }
 
 message MessageResponse {

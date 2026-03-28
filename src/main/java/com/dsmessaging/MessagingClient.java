@@ -1,39 +1,54 @@
 package com.dsmessaging;
 
-import com.dsmessaging.grpc.*;
+import com.dsmessaging.grpc.MessagingServiceGrpc;
+import com.dsmessaging.grpc.HLCTimestamp;
+import com.dsmessaging.grpc.MessageRequest;
+import com.dsmessaging.grpc.MessageResponse;
+import com.dsmessaging.grpc.SyncRequest;
+import com.dsmessaging.grpc.SyncResponse;
+import com.dsmessaging.grpc.MessagingServiceGrpc.MessagingServiceBlockingStub;
 import com.dsmessaging.sync.ClockSync;
 import com.dsmessaging.sync.HybridLogicalClock;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class MessagingClient {
     private static final Logger logger = LoggerFactory.getLogger(MessagingClient.class);
 
-    private final MessagingServiceGrpc.MessagingServiceBlockingStub blockingStub;
+    private final List<MessagingServiceGrpc.MessagingServiceBlockingStub> stubs;
     private final HybridLogicalClock hlc;
     private final ClockSync clockSync;
     private final String nodeId;
+    private int currentServerIndex = 0;
 
-    public MessagingClient(String host, int port, String nodeId) {
+    public MessagingClient(List<String> serverAddresses, String nodeId) {
         this.nodeId = nodeId;
         this.hlc = new HybridLogicalClock(nodeId);
         this.clockSync = new ClockSync();
+        this.stubs = new ArrayList<>();
         
-        ManagedChannel channel = ManagedChannelBuilder.forAddress(host, port)
-                .usePlaintext()
-                .build();
-        this.blockingStub = MessagingServiceGrpc.newBlockingStub(channel);
+        for (String addr : serverAddresses) {
+            String[] parts = addr.split(":");
+            ManagedChannel channel = ManagedChannelBuilder.forAddress(parts[0], Integer.parseInt(parts[1]))
+                    .usePlaintext()
+                    .build();
+            this.stubs.add(MessagingServiceGrpc.newBlockingStub(channel));
+        }
         
         // Start background sync
         new Thread(this::backgroundSyncLoop).start();
     }
 
     public void sendMessage(String content) {
-        // Update HLC for local event (sending)
+        // Update HLC for local event (sending) (Member 3 requirement)
         HybridLogicalClock currentHlc = hlc.updateLocal();
         
         HLCTimestamp ts = HLCTimestamp.newBuilder()
@@ -46,17 +61,30 @@ public class MessagingClient {
                 .setSenderId(nodeId)
                 .setContent(content)
                 .setTimestamp(ts)
+                .setConversationId("default-conv")
+                .setClientRequestId(UUID.randomUUID().toString())
                 .build();
         
-        try {
-            MessageResponse response = blockingStub.sendMessage(request);
-            if (response.getSuccess()) {
-                logger.debug("Message sent successfully");
-            } else {
-                logger.error("Failed to send message: {}", response.getErrorMessage());
+        // Automatic Failover (Member 1 requirement)
+        int attempts = 0;
+        boolean success = false;
+        while (attempts < stubs.size() && !success) {
+            try {
+                MessageResponse response = stubs.get(currentServerIndex).sendMessage(request);
+                if (response.getSuccess()) {
+                    logger.debug("Message sent successfully to server {}", currentServerIndex);
+                    success = true;
+                } else {
+                    logger.error("Failed to send message: {}", response.getErrorMessage());
+                    // Try next server on error
+                    currentServerIndex = (currentServerIndex + 1) % stubs.size();
+                    attempts++;
+                }
+            } catch (Exception e) {
+                logger.error("RPC failed for server {}: {}", currentServerIndex, e.getMessage());
+                currentServerIndex = (currentServerIndex + 1) % stubs.size();
+                attempts++;
             }
-        } catch (Exception e) {
-            logger.error("RPC failed: {}", e.getMessage());
         }
     }
 
@@ -75,7 +103,7 @@ public class MessagingClient {
     private void syncClock() {
         long t0 = System.currentTimeMillis();
         try {
-            SyncResponse response = blockingStub.syncClock(SyncRequest.newBuilder().setT0(t0).build());
+            SyncResponse response = stubs.get(currentServerIndex).syncClock(SyncRequest.newBuilder().setT0(t0).build());
             long t3 = System.currentTimeMillis();
             clockSync.updateOffset(t0, response.getT1(), response.getT2(), t3);
         } catch (Exception e) {
@@ -84,11 +112,11 @@ public class MessagingClient {
     }
 
     public static void main(String[] args) throws Exception {
-        String host = (args.length > 0) ? args[0] : "localhost";
-        int port = (args.length > 1) ? Integer.parseInt(args[1]) : 50051;
-        String nodeId = (args.length > 2) ? args[2] : "client-1";
+        String serverNodes = (args.length > 0) ? args[0] : "localhost:50051";
+        String nodeId = (args.length > 1) ? args[1] : "client-1";
 
-        MessagingClient client = new MessagingClient(host, port, nodeId);
+        List<String> serverList = Arrays.asList(serverNodes.split(","));
+        MessagingClient client = new MessagingClient(serverList, nodeId);
         
         // Simulating some message sending
         for (int i = 0; i < 5; i++) {

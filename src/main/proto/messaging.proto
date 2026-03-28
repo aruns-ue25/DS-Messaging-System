@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.dsmessaging.grpc";
+option java_outer_classname = "MessagingProto";
+
+package messaging;
+
+service MessagingService {
+  // RPC for sending a message
+  rpc SendMessage (MessageRequest) returns (MessageResponse);
+
+  // RPC for clock synchronization (NTP-like)
+  rpc SyncClock (SyncRequest) returns (SyncResponse);
+}
+
+message MessageRequest {
+  string sender_id = 1;
+  string content = 2;
+  HLCTimestamp timestamp = 3;
+}
+
+message MessageResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message SyncRequest {
+  int64 t0 = 1; // Origin timestamp
+}
+
+message SyncResponse {
+  int64 t0 = 1; // Origin timestamp (from request)
+  int64 t1 = 2; // Receive timestamp at server
+  int64 t2 = 3; // Transmit timestamp from server
+}
+
+message HLCTimestamp {
+  int64 wall_time = 1;
+  int32 logical_counter = 2;
+  string node_id = 3;
+}

@@ -15,8 +15,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class ServerNode {
+public class ServerNode implements PeerNode {
+    private static final Logger logger = LoggerFactory.getLogger(ServerNode.class);
     private final String serverId;
     private boolean active;
     
@@ -24,7 +27,7 @@ public class ServerNode {
     private final IdempotencyStore idempotencyStore;
     private final MetricsCollector metrics;
     
-    private final List<ServerNode> peers;
+    private final List<PeerNode> peers;
     private final ConcurrentHashMap<String, AtomicInteger> conversationSequences;
 
     public ServerNode(String serverId, MetricsCollector metrics) {
@@ -37,10 +40,19 @@ public class ServerNode {
         this.conversationSequences = new ConcurrentHashMap<>();
     }
 
-    public void addPeer(ServerNode peer) {
+    public void addPeer(PeerNode peer) {
         if (!peers.contains(peer) && peer != this) {
             peers.add(peer);
         }
+    }
+
+    @Override
+    public String getPeerId() {
+        return serverId;
+    }
+
+    public List<PeerNode> getPeers() {
+        return peers;
     }
 
     // ---------------------------------------------------------
@@ -76,7 +88,7 @@ public class ServerNode {
             acks++;
         }
         
-        for (ServerNode peer : peers) {
+        for (PeerNode peer : peers) {
             if (peer.isActive()) {
                 if (peer.receiveReplicaWrite(message, key, pendingRecord)) {
                     acks++;
@@ -88,8 +100,9 @@ public class ServerNode {
         if (acks >= 2) {
             message.setStatus(MessageStatus.COMMITTED);
             this.commitMessage(messageId);
+            logger.info("QUORUM WRITE SUCCESSFUL (W=2) for message {} on coordinator {}", messageId, serverId);
             
-            for (ServerNode peer : peers) {
+            for (PeerNode peer : peers) {
                 if (peer.isActive()) {
                     peer.commitMessage(messageId);
                 }
@@ -111,13 +124,16 @@ public class ServerNode {
     // ---------------------------------------------------------
     // REPLICA WRITE PATH
     // ---------------------------------------------------------
+    @Override
     public boolean receiveReplicaWrite(Message message, IdempotencyKey key, IdempotencyRecord record) {
         if (!active) return false;
         idempotencyStore.putRecord(key, record);
         messageStore.saveMessage(message);
+        logger.info("REPLICA WRITE SAVED on node {}: Message ID={}, Content='{}'", serverId, message.getMessageId(), message.getContent());
         return true;
     }
     
+    @Override
     public void commitMessage(String messageId) {
         if (!active) return;
         Message msg = messageStore.getMessage(messageId);
@@ -147,10 +163,10 @@ public class ServerNode {
         int maxSeenClusterVersion = localMax;
         List<Message> freshestMessages = localCache;
         
-        for (ServerNode peer : peers) {
+        for (PeerNode peer : peers) {
             if (peer.isActive()) {
-                List<Message> peerMessages = peer.messageStore.getLatestMessages(conversationId, limit);
-                int peerMax = peer.messageStore.getMaxVersion(conversationId);
+                List<Message> peerMessages = peer.getLatestMessages(conversationId, limit);
+                int peerMax = peer.getMaxVersion(conversationId);
                 
                 if (peerMax < maxSeenClusterVersion) {
                     metrics.staleReadPrevented.incrementAndGet(); // We noticed state but bypassed it safely
@@ -193,6 +209,12 @@ public class ServerNode {
             session.updateLastSeenVersion(conversationId, results.get(0).getCommitVersion());
         }
         metrics.recordReadLatency(System.currentTimeMillis() - start);
+        if (results.size() >= 2) {
+            logger.info("QUORUM READ SUCCESSFUL (R=2) for conversation {} on node {}", conversationId, serverId);
+        } else {
+            logger.warn("QUORUM READ FAILED (only {}/2 nodes responded) for conversation {} on node {}", results.size(), conversationId, serverId);
+        }
+        
         return results;
     }
 
@@ -238,6 +260,16 @@ public class ServerNode {
             
         messageStore.saveMessage(msg);
         System.out.println("Message stored in Server " + serverId + ": " + messageContent);
+    }
+
+    @Override
+    public List<Message> getLatestMessages(String conversationId, int limit) {
+        return messageStore.getLatestMessages(conversationId, limit);
+    }
+
+    @Override
+    public int getMaxVersion(String conversationId) {
+        return messageStore.getMaxVersion(conversationId);
     }
 
     // Getters

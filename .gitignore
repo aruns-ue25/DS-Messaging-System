@@ -5,3 +5,6 @@ bin/
 .project
 .metadata/
 *.log
+.idea/
+*.class
+output.txt

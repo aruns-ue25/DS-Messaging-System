@@ -1,0 +1,63 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Detecting the operating system and CPU architecture
+[INFO] ------------------------------------------------------------------------
+[INFO] os.detected.name: windows
+[INFO] os.detected.arch: x86_64
+[INFO] os.detected.bitness: 64
+[INFO] os.detected.version: 10.0
+[INFO] os.detected.version.major: 10
+[INFO] os.detected.version.minor: 0
+[INFO] os.detected.classifier: windows-x86_64
+[INFO] 
+[INFO] ----------------< com.dsmessaging:ds-messaging-system >-----------------
+[INFO] Building Distributed Messaging System 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ ds-messaging-system ---
+[INFO] Deleting C:\Users\jadav\Desktop\DS\DS-Messaging-System\target
+[INFO] 
+[INFO] --- protobuf:0.6.1:compile (default) @ ds-messaging-system ---
+[INFO] Compiling 1 proto file(s) to C:\Users\jadav\Desktop\DS\DS-Messaging-System\target\generated-sources\protobuf\java
+[INFO] 
+[INFO] --- protobuf:0.6.1:compile-custom (default) @ ds-messaging-system ---
+[INFO] Compiling 1 proto file(s) to C:\Users\jadav\Desktop\DS\DS-Messaging-System\target\generated-sources\protobuf\grpc-java
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ ds-messaging-system ---
+[INFO] skip non existing resourceDirectory C:\Users\jadav\Desktop\DS\DS-Messaging-System\src\main\resources
+[INFO] Copying 1 resource from src\main\proto to target\classes
+[INFO] Copying 1 resource from src\main\proto to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ ds-messaging-system ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 56 source files with javac [debug target 11] to target\classes
+[INFO] -------------------------------------------------------------
+[WARNING] COMPILATION WARNING : 
+[INFO] -------------------------------------------------------------
+[WARNING] system modules path not set in conjunction with -source 11
+[INFO] 1 warning
+[INFO] -------------------------------------------------------------
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /C:/Users/jadav/Desktop/DS/DS-Messaging-System/src/main/java/com/dsmessaging/server/ServerNode.java:[336,17] method deactivate() is already defined in class com.dsmessaging.server.ServerNode
+[ERROR] /C:/Users/jadav/Desktop/DS/DS-Messaging-System/src/main/java/com/dsmessaging/server/ServerNode.java:[340,17] method activate() is already defined in class com.dsmessaging.server.ServerNode
+[INFO] 2 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  6.142 s
+[INFO] Finished at: 2026-03-29T09:22:09+05:30
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile (default-compile) on project ds-messaging-system: Compilation failure: Compilation failure: 
+[ERROR] /C:/Users/jadav/Desktop/DS/DS-Messaging-System/src/main/java/com/dsmessaging/server/ServerNode.java:[336,17] method deactivate() is already defined in class com.dsmessaging.server.ServerNode
+[ERROR] /C:/Users/jadav/Desktop/DS/DS-Messaging-System/src/main/java/com/dsmessaging/server/ServerNode.java:[340,17] method activate() is already defined in class com.dsmessaging.server.ServerNode
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

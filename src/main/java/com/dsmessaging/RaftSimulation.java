@@ -1,6 +1,7 @@
 package com.dsmessaging;
 
 import com.dsmessaging.model.Message;
+import com.dsmessaging.model.MessageStatus;
 import com.dsmessaging.server.ServerNode;
 import com.dsmessaging.service.MessagingSystem;
 
@@ -20,17 +21,17 @@ public class RaftSimulation {
     public static void main(String[] args) throws InterruptedException {
         MessagingSystem system = new MessagingSystem();
 
-        ServerNode s1 = new ServerNode("Server-1");
-        ServerNode s2 = new ServerNode("Server-2");
-        ServerNode s3 = new ServerNode("Server-3");
+        system.addServer("Server-1");
+        system.addServer("Server-2");
+        system.addServer("Server-3");
+
+        ServerNode s1 = system.getServer("Server-1");
+        ServerNode s2 = system.getServer("Server-2");
+        ServerNode s3 = system.getServer("Server-3");
 
         s1.getRaftNode().setMessagingSystem(system);
         s2.getRaftNode().setMessagingSystem(system);
         s3.getRaftNode().setMessagingSystem(system);
-
-        system.addServer(s1);
-        system.addServer(s2);
-        system.addServer(s3);
 
         System.out.println("--- Starting Nodes ---");
         s1.activate();
@@ -41,7 +42,8 @@ public class RaftSimulation {
         Thread.sleep(1500);
 
         System.out.println("\n--- Sending Message to Current Leader ---");
-        Message msg1 = new Message("msg-1", "Client", "System", "Hello Raft!", System.currentTimeMillis());
+        Message msg1 = new Message("msg-1", "conv-sim", "Client", "System", "req-1", "Hello Raft!",
+                System.currentTimeMillis(), 1, MessageStatus.COMMITTED, System.currentTimeMillis());
         sendToLeader(system, msg1);
 
         Thread.sleep(1000);
@@ -53,7 +55,8 @@ public class RaftSimulation {
         Thread.sleep(1500);
 
         System.out.println("\n--- Sending another message to Current Leader ---");
-        Message msg2 = new Message("msg-2", "Client", "System", "Testing second message!", System.currentTimeMillis());
+        Message msg2 = new Message("msg-2", "conv-sim", "Client", "System", "req-2", "Testing second message!",
+                System.currentTimeMillis(), 2, MessageStatus.COMMITTED, System.currentTimeMillis());
         sendToLeader(system, msg2);
 
         Thread.sleep(1000);

@@ -142,4 +142,15 @@ public class MessagingSystem {
     public MetricsCollector getGlobalMetrics() {
         return globalMetrics;
     }
+
+    public List<ServerNode> getServers() {
+        return servers;
+    }
+
+    public void displayAllServerMessages() {
+        System.out.println("--- All Server Messages ---");
+        for (ServerNode server : servers) {
+            System.out.println(server.getServerId() + " node state: " + (server.isActive() ? "ACTIVE" : "DOWN"));
+        }
+    }
 }

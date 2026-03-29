@@ -7,6 +7,7 @@ import com.dsmessaging.model.IdempotencyRecord;
 import com.dsmessaging.model.Message;
 import com.dsmessaging.model.MessageStatus;
 import com.dsmessaging.service.IdempotencyStore;
+import com.dsmessaging.service.MessageService;
 import com.dsmessaging.service.MessageStore;
 import com.dsmessaging.service.MetricsCollector;
 
@@ -330,14 +331,6 @@ public class ServerNode implements PeerNode {
 
     public boolean isActive() {
         return active;
-    }
-
-    public void deactivate() {
-        failNode();
-    }
-
-    public void activate() {
-        recoverNode();
     }
 
     public MessageStore getMessageStore() {

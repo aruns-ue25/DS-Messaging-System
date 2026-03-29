@@ -7,14 +7,9 @@
   <properties>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
-  </properties>
-  <description>Fault-tolerant distributed messaging system for Distributed Systems module</description>
-
-  <properties>
-    <maven.compiler.source>11</maven.compiler.source>
-    <maven.compiler.target>11</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
+  <description>Fault-tolerant distributed messaging system for Distributed Systems module</description>
 
   <dependencies>
     <dependency>

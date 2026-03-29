@@ -1,0 +1,48 @@
+On branch main
+Your branch and 'origin/main' have diverged,
+and have 4 and 22 different commits each, respectively.
+  (use "git pull" if you want to integrate the remote branch with yours)
+
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+  (use "git merge --abort" to abort the merge)
+
+Changes to be committed:
+	modified:   .gitignore
+	new file:   README.md
+	modified:   pom.xml
+	new file:   src/main/java/com/dsmessaging/IdempotencyTest.java
+	modified:   src/main/java/com/dsmessaging/Main.java
+	new file:   src/main/java/com/dsmessaging/MessagingClient.java
+	new file:   src/main/java/com/dsmessaging/MessagingServer.java
+	new file:   src/main/java/com/dsmessaging/MessagingServiceImpl.java
+	new file:   src/main/java/com/dsmessaging/SyncTest.java
+	new file:   src/main/java/com/dsmessaging/model/ClientSession.java
+	new file:   src/main/java/com/dsmessaging/model/ClientWriteRequest.java
+	new file:   src/main/java/com/dsmessaging/model/IdempotencyKey.java
+	new file:   src/main/java/com/dsmessaging/model/IdempotencyRecord.java
+	modified:   src/main/java/com/dsmessaging/model/Message.java
+	new file:   src/main/java/com/dsmessaging/model/MessageStatus.java
+	new file:   src/main/java/com/dsmessaging/server/GrpcPeerNode.java
+	new file:   src/main/java/com/dsmessaging/server/PeerNode.java
+	new file:   src/main/java/com/dsmessaging/service/IdempotencyStore.java
+	new file:   src/main/java/com/dsmessaging/service/MessageStore.java
+	new file:   src/main/java/com/dsmessaging/service/MetricsCollector.java
+	new file:   src/main/java/com/dsmessaging/sync/ClockSync.java
+	new file:   src/main/java/com/dsmessaging/sync/HybridLogicalClock.java
+	new file:   src/main/java/com/dsmessaging/sync/MessageBuffer.java
+	new file:   src/main/proto/messaging.proto
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+	both modified:   src/main/java/com/dsmessaging/server/ServerNode.java
+	both modified:   src/main/java/com/dsmessaging/service/MessagingSystem.java
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	commit_script.ps1
+	git_status.txt
+	git_status_ascii.txt
+
+  Consensus 63bc330 fix: Dynamically route simulation messages to the current leader
+* main      259ec40 [ahead 4, behind 22] Add RaftSimulation to test and demonstrate fault tolerance and consensus

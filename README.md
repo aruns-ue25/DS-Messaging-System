@@ -1,23 +1,47 @@
-# Distributed Messaging System - Consensus & Agreement
+# Distributed Messaging System
 
-## Team Information
-- **Member 1 Name**: [Pending]
-- **Registration**: [Pending]
-- **Email**: [Pending]
+This project implements a fault-tolerant distributed messaging system. It includes components for **Consensus & Agreement** and **Time Synchronization**.
 
-*(Note: Other team members should fill out their respective parts above)*
+## Features
 
-## Project Overview
-This project simulates a fault-tolerant distributed messaging system. It demonstrates real-time message delivery across servers, utilizing the **Raft Consensus Algorithm** to ensure consistent data storage, leader election, and high availability against node failures.
+### Consensus & Agreement
+- Demonstrates real-time message delivery across servers.
+- Utilizes the **Raft Consensus Algorithm** to ensure consistent data storage, leader election, and high availability against node failures.
 
-## Instructions for Running the Prototype
-1. **Prerequisites**: Ensure you have Java 11 (or higher) and Maven installed correctly.
-2. **Compilation**: Run the following command in the root folder to compile the project:
+### Time Synchronization
+- **NTP-like Physical Clock Synchronization**: Nodes periodically sync with a server to calculate clock offset and network delay.
+- **Hybrid Logical Clocks (HLC)**: Combines physical time and logical counters to ensure causal ordering even when physical clocks drift.
+- **Message Reordering Buffer**: Buffers incoming messages and processes them in the correct HLC order.
+
+## Prerequisites
+- Java 11 or higher
+- Maven 3.6+
+
+## How to Run
+
+1. **Compilation**: Run the following command in the root folder to compile the project:
    ```bash
-   mvn clean compile
+   mvn clean install
    ```
-3. **Execution**: To run the full Raft fault-tolerance and consensus simulation:
+
+2. **Run the Server (gRPC)**:
+   ```bash
+   java -cp target/ds-messaging-system-0.0.1-SNAPSHOT.jar com.dsmessaging.MessagingServer 50051 server-1
+   ```
+
+3. **Run the Client (gRPC)**:
+   ```bash
+   java -cp target/ds-messaging-system-0.0.1-SNAPSHOT.jar com.dsmessaging.MessagingClient localhost 50051 client-1
+   ```
+
+4. **Run Raft Simulation (Consensus Component)**:
+   To run the full Raft fault-tolerance and consensus simulation:
    ```bash
    mvn exec:java -Dexec.mainClass="com.dsmessaging.RaftSimulation"
    ```
-4. **Expected Output**: The console will output the nodes starting up, randomized leader election, simulated RPC message broadcast, and fail-over mechanisms kicking in when the Leader node explicitly crashes.
+   *Expected Output*: The console will output the nodes starting up, randomized leader election, simulated RPC message broadcast, and fail-over mechanisms.
+
+## Project Structure
+- `com.dsmessaging.sync.*`: Core HLC logic, ClockSync, MessageBuffer
+- `com.dsmessaging.raft.*`: Raft consensus algorithm, Leader election
+- `com.dsmessaging.MessagingServer` and `com.dsmessaging.MessagingClient`: gRPC endpoints

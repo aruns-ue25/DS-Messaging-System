@@ -1,33 +1,66 @@
 package com.dsmessaging.service;
 
-import com.dsmessaging.model.Message;
 import com.dsmessaging.server.ServerNode;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.dsmessaging.model.Message;
 
 public class MessagingSystem {
     private final List<ServerNode> servers;
+    private final MetricsCollector globalMetrics;
 
     public MessagingSystem() {
         this.servers = new ArrayList<>();
+        this.globalMetrics = new MetricsCollector();
     }
 
-    public void addServer(ServerNode server) {
-        servers.add(server);
-        System.out.println(server.getServerId() + " added to the messaging system.");
+    public void addServer(String serverId) {
+        ServerNode newServer = new ServerNode(serverId, globalMetrics);
+
+        for (ServerNode existing : servers) {
+            existing.addPeer(newServer);
+            newServer.addPeer(existing);
+        }
+
+        servers.add(newServer);
+        System.out.println(serverId + " added to the messaging system.");
     }
 
-    public ServerNode findServerById(String serverId) {
+    public ServerNode getServer(String serverId) {
         for (ServerNode server : servers) {
-            if (server.getServerId().equals(serverId)) {
+            if (server.getServerId().equals(serverId))
                 return server;
+        }
+        throw new IllegalArgumentException("Server not found");
+    }
+
+    public void checkNodeHealth() {
+        for (ServerNode node : servers) {
+            if (!node.isActive()) {
+                System.out.println("ClusterManager detected failure in Server " + node.getNodeId());
+            }
+        }
+    }
+
+    private ServerNode getActiveNode() {
+        for (ServerNode node : servers) {
+            if (node.isActive()) {
+                return node;
             }
         }
         return null;
     }
 
     // --- Raft RPC Routing ---
+
+    private ServerNode findServerById(String id) {
+        try {
+            return getServer(id);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
 
     public void broadcastRequestVote(String candidateId, com.dsmessaging.raft.RaftRPC.RequestVote request) {
         for (ServerNode node : servers) {
@@ -86,14 +119,27 @@ public class MessagingSystem {
         server.getRaftNode().clientRequest(message);
     }
 
-    public void displayAllServerMessages() {
-        System.out.println("\n=== DISPLAYING ALL SERVER MESSAGES ===");
-        for (ServerNode server : servers) {
-            server.displayMessages();
+    public void sendMessage(String message) {
+        ServerNode target = getActiveNode();
+
+        if (target == null) {
+            System.out.println("No active servers available!");
+            return;
+        }
+
+        target.storeMessage(message);
+        replicateMessage(target, message);
+    }
+
+    public void replicateMessage(ServerNode source, String message) {
+        for (ServerNode node : servers) {
+            if (node != source && node.isActive()) {
+                node.storeMessage(message);
+            }
         }
     }
 
-    public List<ServerNode> getServers() {
-        return servers;
+    public MetricsCollector getGlobalMetrics() {
+        return globalMetrics;
     }
 }

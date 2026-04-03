@@ -5,6 +5,6 @@ bin/
 .project
 .metadata/
 *.log
-.idea/verify_cluster.ps1
+.idea/
 classpath.txt
  

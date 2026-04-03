@@ -17,6 +17,14 @@ public class IdempotencyStore {
         store.put(key, record);
     }
     
+    public void removeRecord(IdempotencyKey key) {
+        store.remove(key);
+    }
+
+    public Map<IdempotencyKey, IdempotencyRecord> getStore() {
+        return store;
+    }
+    
     public int getSize() {
         return store.size();
     }

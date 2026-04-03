@@ -78,6 +78,14 @@ public class RaftNode {
 
         System.out.println(serverId + " starts election for term " + currentTerm);
 
+        // Immediate promotion if we are the only active node (Last Survivor)
+        long activeCount = messagingSystem.getServers().stream().filter(s -> s.isActive()).count();
+        int threshold = (int) (activeCount / 2 + 1);
+        if (votesReceived >= threshold) {
+            becomeLeader();
+            return;
+        }
+
         int lastLogIndex = log.size() - 1;
         int lastLogTerm = log.get(lastLogIndex).getTerm();
 
@@ -133,7 +141,9 @@ public class RaftNode {
 
         if (reply.voteGranted) {
             votesReceived++;
-            if (votesReceived > messagingSystem.getServers().size() / 2) {
+            long activeCount = messagingSystem.getServers().stream().filter(ServerNode::isActive).count();
+            int threshold = (int) (activeCount / 2 + 1);
+            if (votesReceived >= threshold) {
                 becomeLeader();
             }
         }
@@ -251,7 +261,9 @@ public class RaftNode {
                         agreeCount++;
                     }
                 }
-                if (agreeCount > messagingSystem.getServers().size() / 2) {
+                long activeCount = messagingSystem.getServers().stream().filter(ServerNode::isActive).count();
+                int threshold = (int) (activeCount / 2 + 1);
+                if (agreeCount >= threshold) {
                     commitIndex = n;
                     applyLog();
                     break;
@@ -283,5 +295,9 @@ public class RaftNode {
 
     public NodeState getState() {
         return state;
+    }
+
+    public int getCurrentTerm() {
+        return currentTerm;
     }
 }

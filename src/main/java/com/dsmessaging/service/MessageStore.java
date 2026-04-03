@@ -23,6 +23,11 @@ public class MessageStore {
     }
 
     public synchronized void saveMessage(Message message) {
+        // ID Guard: Never save a duplicate message ID
+        if (messagesById.containsKey(message.getMessageId())) {
+            return;
+        }
+
         messagesById.put(message.getMessageId(), message);
         
         // Save to specific conversation structure
@@ -52,21 +57,32 @@ public class MessageStore {
         metrics.cacheReads.incrementAndGet();
         List<Message> cached = recentCache.get(conversationId);
         
+        List<Message> resultList = null;
+
         // Serve from cache if it contains enough elements, or if it has ALL the elements
         if (cached != null && cached.size() >= limit) {
             metrics.cacheHits.incrementAndGet();
             int start = cached.size() - limit;
-            return new ArrayList<>(cached.subList(start, cached.size()));
+            resultList = new ArrayList<>(cached.subList(start, cached.size()));
         } else if (cached != null && cached.size() == diskMessagesByConv.getOrDefault(conversationId, new ArrayList<>()).size()) {
             metrics.cacheHits.incrementAndGet();
-            return new ArrayList<>(cached);
+            resultList = new ArrayList<>(cached);
+        } else {
+            // Cache miss -> Fetch from 'disk'
+            metrics.cacheMisses.incrementAndGet();
+            List<Message> diskMsgs = diskMessagesByConv.getOrDefault(conversationId, new ArrayList<>());
+            int start = Math.max(0, diskMsgs.size() - limit);
+            resultList = new ArrayList<>(diskMsgs.subList(start, diskMsgs.size()));
         }
-        
-        // Cache miss -> Fetch from 'disk'
-        metrics.cacheMisses.incrementAndGet();
-        List<Message> diskMsgs = diskMessagesByConv.getOrDefault(conversationId, new ArrayList<>());
-        int start = Math.max(0, diskMsgs.size() - limit);
-        return new ArrayList<>(diskMsgs.subList(start, diskMsgs.size()));
+
+        // Only return COMMITTED messages to prevent UI from showing failed attempts
+        List<Message> filtered = new ArrayList<>();
+        for (Message m : resultList) {
+            if (m.getStatus() == com.dsmessaging.model.MessageStatus.COMMITTED) {
+                filtered.add(m);
+            }
+        }
+        return filtered;
     }
 
     public List<Message> getMessagesBeforeVersion(String conversationId, int beforeVersion, int limit) {

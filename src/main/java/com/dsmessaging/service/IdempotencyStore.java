@@ -74,4 +74,21 @@ public class IdempotencyStore {
         }
         return 0;
     }
+
+    public java.util.Map<IdempotencyKey, IdempotencyRecord> getStore() {
+        java.util.Map<IdempotencyKey, IdempotencyRecord> map = new java.util.concurrent.ConcurrentHashMap<>();
+        String sql = "SELECT * FROM idempotency_records";
+        try (Connection conn = DatabaseManager.getInstance().getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                IdempotencyKey key = new IdempotencyKey(rs.getString("conversation_id"), rs.getString("sender_id"), rs.getString("client_request_id"));
+                IdempotencyRecord rec = new IdempotencyRecord(rs.getString("message_id"), rs.getInt("commit_version"), MessageStatus.valueOf(rs.getString("final_status")), rs.getLong("created_at"));
+                map.put(key, rec);
+            }
+        } catch (SQLException e) {
+            System.err.println("Error syncing idempotency store: " + e.getMessage());
+        }
+        return map;
+    }
 }

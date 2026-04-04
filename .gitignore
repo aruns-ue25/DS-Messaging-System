@@ -8,3 +8,8 @@ bin/
 .idea/
 classpath.txt
  
+ # Maven/Java build artifacts
+*.class
+
+# Local output files
+output.txt

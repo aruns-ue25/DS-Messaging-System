@@ -180,17 +180,17 @@ public class MessageStore {
     }
     
     private Message mapRowToMessage(ResultSet rs) throws SQLException {
-        Message msg = new Message(
+        return new Message(
+            rs.getString("id"),
             rs.getString("conversation_id"),
             rs.getString("sender_id"),
             rs.getString("receiver_id"),
-            rs.getString("content")
+            rs.getString("client_request_id"),
+            rs.getString("content"),
+            System.currentTimeMillis(), // timestamp (not strictly stored in DB if we have created_at)
+            rs.getInt("commit_version"),
+            MessageStatus.valueOf(rs.getString("status")),
+            rs.getLong("created_at")
         );
-        msg.setMessageId(rs.getString("id"));
-        msg.setCommitVersion(rs.getInt("commit_version"));
-        msg.setCreatedAt(rs.getLong("created_at"));
-        msg.setStatus(MessageStatus.valueOf(rs.getString("status")));
-        msg.setClientRequestId(rs.getString("client_request_id"));
-        return msg;
     }
 }

@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS Messaging - Distributed Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #f8fafc;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(circle at 50% 50%, #1e1b4b 0%, #0f172a 100%);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .logo { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
+        .logo span { color: var(--primary); }
+
+        main {
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        /* --- Panels --- */
+        .panel {
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+            color: var(--secondary);
+        }
+
+        .panel-content { padding: 1rem; overflow-y: auto; flex-grow: 1; }
+
+        /* --- Nodes Column --- */
+        .node-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+        .node-card.down { border-color: var(--danger); opacity: 0.7; }
+        .node-card.active { border-color: var(--secondary); background: rgba(6, 182, 212, 0.1); box-shadow: 0 0 15px rgba(6, 182, 212, 0.2); }
+        .node-card.clickable { cursor: pointer; }
+        .node-card:hover { transform: translateY(-2px); background: rgba(255, 255, 255, 0.05); }
+
+        .node-status { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
+        .down .status-dot { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+        .role-badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 999px; background: var(--primary); text-transform: uppercase; }
+        .role-badge.leader { background: var(--warning); color: black; }
+
+        .node-actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
+        button {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            background: var(--glass-border);
+            color: white;
+        }
+        button:hover { opacity: 0.8; }
+        .btn-fail { background: var(--danger); }
+        .btn-recover { background: var(--success); }
+
+        /* --- Messaging Column --- */
+        .chat-space { display: flex; flex-direction: column; height: 100%; }
+        .message-list { flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; padding-right: 0.5rem; }
+        
+        .msg { background: rgba(255, 255, 255, 0.03); padding: 0.75rem; border-radius: 0.75rem; max-width: 80%; border: 1px solid var(--glass-border); }
+        .msg.sent { align-self: flex-end; border-right: 3px solid var(--primary); }
+        .msg.received { align-self: flex-start; border-left: 3px solid var(--secondary); }
+        .msg-meta { font-size: 0.7rem; color: #94a3b8; display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+        .msg-content { font-size: 0.95rem; }
+
+        .msg-form {
+            padding-top: 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 0.75rem;
+            border-top: 1px solid var(--glass-border);
+        }
+        input, select {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            color: white;
+            font-family: inherit;
+        }
+        input:focus { outline: 1px solid var(--primary); }
+        .btn-send { 
+            background: var(--primary); 
+            padding: 1rem 1.5rem; 
+            font-size: 1rem;
+            margin-top: 0.5rem;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+        }
+        .btn-send:active { transform: translateY(1px); }
+
+        /* --- System Column --- */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .stat-box { background: rgba(255, 255, 255, 0.03); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--glass-border); }
+        .stat-label { font-size: 0.7rem; color: #94a3b8; margin-bottom: 0.25rem; }
+        .stat-value { font-size: 1.1rem; font-weight: 600; }
+
+        .hlc-view { font-family: monospace; font-size: 0.8rem; background: black; padding: 0.5rem; border-radius: 0.4rem; margin-top: 0.5rem; display: block; overflow-x: hidden; text-overflow: ellipsis; white-space: nowrap;}
+
+        .event-log { font-family: monospace; font-size: 0.75rem; color: #94a3b8; height: 180px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 0.5rem; padding: 0.5rem; }
+        .log-entry { margin-bottom: 0.25rem; border-left: 2px solid transparent; padding-left: 0.4rem; }
+        .log-info { border-left-color: var(--secondary); }
+        .log-warn { border-left-color: var(--warning); color: var(--warning); }
+        .log-error { border-left-color: var(--danger); color: var(--danger); }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo"><span>⚛</span> DS MESSAGING</div>
+        <div id="global-status" style="display: flex; gap: 1rem; align-items: center; font-size: 0.8rem;">
+            <div style="color: var(--success)">● CLUSTER ONLINE</div>
+            <div id="active-term" style="background: var(--glass); padding: 0.2rem 0.5rem; border-radius: 0.3rem;">TERM: 0</div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Nodes Column -->
+        <section class="panel">
+            <div class="panel-header">Cluster Topology (Member 1 & 4)</div>
+            <div class="panel-content" id="node-list">
+                <!-- Node Cards will be generated dynamically by JS -->
+            </div>
+        </section>
+
+        <!-- Messaging Space -->
+        <section class="panel">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>Messaging Space</span>
+                <span id="inspecting-tag" style="font-size: 0.7rem; color: var(--warning); background: rgba(245, 158, 11, 0.1); padding: 0.2rem 0.6rem; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
+                    Inspecting: Leader
+                </span>
+            </div>
+            <div class="panel-content chat-space">
+                <div class="message-list" id="message-list">
+                    <!-- Messages -->
+                </div>
+                <div class="msg-form">
+                    <input type="text" id="sender" placeholder="From" value="Alice">
+                    <input type="text" id="receiver" placeholder="To" value="Bob">
+                    <input type="text" id="content" placeholder="Type a message..." style="grid-column: span 2;">
+                    
+                    <!-- Advanced options hidden to keep UI simple -->
+                    <div style="display: none;">
+                        <select id="coordinator"><option value="auto">Auto</option></select>
+                        <input type="text" id="reqId">
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; grid-column: span 4;">
+                        <button class="btn-send" style="flex-grow: 2;" onclick="sendMessage()">SEND MESSAGE</button>
+                        <button class="btn-resend" style="flex-grow: 1; background: var(--glass-border); border: 1px solid var(--warning); color: var(--warning);" onclick="resendMessage()" title="Test Idempotency (Repeat Last ReqID)">RE-SEND LAST</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System internals -->
+        <section class="panel">
+            <div class="panel-header">System Status</div>
+            <div class="panel-content">
+                <div class="stat-grid">
+                    <div class="stat-box">
+                        <div class="stat-label">Q-Writes</div>
+                        <div class="stat-value" id="stat-writes">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Q-Reads</div>
+                        <div class="stat-value" id="stat-reads">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Duplicates</div>
+                        <div class="stat-value" id="stat-dupes">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-label">Recovery</div>
+                        <div class="stat-value" id="stat-recover">0</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <div class="panel-header" style="border: none; padding: 0.5rem 0; font-size: 0.75rem;">HLC Clocks</div>
+                    <div id="hlc-list">
+                        <!-- HLC items -->
+                    </div>
+                </div>
+
+                <div style="margin-top: 1.5rem;">
+                    <div class="panel-header" style="border: none; padding: 0.5rem 0; font-size: 0.75rem;">Live Logs</div>
+                    <div class="event-log" id="event-log">
+                        <div class="log-entry log-info">[09:00:00] Dashboard initialized...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API = "http://localhost:9090/api";
+        let lastReqId = "";
+        let selectedNodeId = null;
+        let manualSelection = false;
+        let currentLeaderId = null;
+
+        // --- Core Functions ---
+
+        async function updateCluster() {
+            try {
+                const res = await fetch(`${API}/cluster`);
+                const nodes = await res.json();
+                
+                const nodeList = document.getElementById('node-list');
+                let maxTerm = 0;
+
+                nodes.forEach(node => {
+                    let card = document.getElementById(`card-${node.id}`);
+                    if (!card) {
+                        card = createNodeCard(node.id);
+                        nodeList.appendChild(card);
+                    }
+                    
+                    card.className = node.active ? 'node-card clickable' : 'node-card down';
+                    if (selectedNodeId === node.id) card.classList.add('active');
+                    
+                    const roleBadge = document.getElementById(`role-${node.id}`);
+                    roleBadge.textContent = node.role;
+                    roleBadge.className = node.role === 'LEADER' ? 'role-badge leader' : 'role-badge';
+                    
+                    document.getElementById(`msgs-${node.id}`).textContent = node.msgCount;
+                    
+                    if (node.role === 'LEADER') currentLeaderId = node.id;
+                    if (node.term > maxTerm) maxTerm = node.term;
+                });
+
+                // Auto-select leader ONLY if no manual selection yet
+                if (!manualSelection && currentLeaderId) {
+                    selectedNodeId = currentLeaderId;
+                }
+                
+                // Always keep tag in sync
+                updateInspectingTag();
+
+                document.getElementById('active-term').textContent = `TERM: ${maxTerm}`;
+            } catch (err) {
+                console.error("Cluster update fail", err);
+            }
+        }
+
+        function selectNode(id) {
+            selectedNodeId = id;
+            manualSelection = true;
+            updateInspectingTag();
+            
+            // Visual feedback
+            document.querySelectorAll('.node-card').forEach(c => c.classList.remove('active'));
+            const card = document.getElementById(`card-${id}`);
+            if (card) card.classList.add('active');
+            
+            updateMessages();
+            addLog(`Now inspecting local storage of ${id}`, 'info');
+        }
+
+        function updateInspectingTag() {
+            const tag = document.getElementById('inspecting-tag');
+            if (selectedNodeId) {
+                const isLeader = selectedNodeId === currentLeaderId;
+                tag.textContent = `Inspecting: ${selectedNodeId}${isLeader ? ' (Leader)' : ''}`;
+            } else {
+                tag.textContent = 'Inspecting: Quorum';
+            }
+        }
+
+        async function updateMetrics() {
+            try {
+                const res = await fetch(`${API}/metrics`);
+                const data = await res.json();
+                document.getElementById('stat-writes').textContent = data.writes;
+                document.getElementById('stat-reads').textContent = data.reads;
+                document.getElementById('stat-dupes').textContent = data.dupes;
+                document.getElementById('stat-recover').textContent = data.recoveries;
+            } catch (err) {}
+        }
+
+        async function updateMessages() {
+            try {
+                const url = selectedNodeId 
+                    ? `${API}/messages?convId=default-conv&nodeId=${selectedNodeId}`
+                    : `${API}/messages?convId=default-conv`;
+                
+                const res = await fetch(url);
+                const msgs = await res.json();
+                const container = document.getElementById('message-list');
+                const uniqueMsgs = new Map();
+                
+                msgs.forEach(m => {
+                    // Strict ID-based deduplication
+                    const key = m.messageId;
+                    if (!uniqueMsgs.has(key)) {
+                        uniqueMsgs.set(key, m);
+                    }
+                });
+
+                container.innerHTML = '';
+                Array.from(uniqueMsgs.values()).sort((a,b) => a.timestamp - b.timestamp).forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = m.senderId === document.getElementById('sender').value ? 'msg sent' : 'msg received';
+                    const timeStr = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                    div.innerHTML = `
+                        <div class="msg-meta">
+                            <span>${m.senderId} • ${timeStr}</span>
+                            <span>v${m.commitVersion}</span>
+                        </div>
+                        <div class="msg-content">${m.content}</div>
+                    `;
+                    container.appendChild(div);
+                });
+                container.scrollTop = container.scrollHeight;
+            } catch (err) {}
+        }
+
+        async function sendMessage() {
+            const btn = document.querySelector('.btn-send');
+            btn.disabled = true;
+            
+            const payload = {
+                convId: "default-conv",
+                sender: document.getElementById('sender').value,
+                receiver: document.getElementById('receiver').value,
+                content: document.getElementById('content').value,
+                reqId: document.getElementById('reqId').value || `req-${Date.now()}`
+            };
+
+            try {
+                const res = await fetch(`${API}/write`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    addLog(`Write Success: ${payload.content} (v${result.version})`, 'info');
+                    document.getElementById('content').value = '';
+                    // Track for potential future resend, then generate new one
+                    lastReqId = payload.reqId;
+                    generateReqId(); 
+                    updateMessages();
+                } else {
+                    addLog(`Write Error: ${result.error}`, 'error');
+                    // DO NOT generate new ID on failure, so user can retry the SAME one
+                    lastReqId = payload.reqId; 
+                }
+            } catch (err) {
+                addLog(`Network error on send`, 'error');
+            }
+            btn.disabled = false;
+        }
+
+        async function resendMessage() {
+            // Re-send logic for idempotency check
+            addLog(`Re-sending message with ID: ${lastReqId}...`, 'warn');
+            // Mock logic: set reqId back to old one and send
+            const currId = document.getElementById('reqId').value;
+            document.getElementById('reqId').value = lastReqId;
+            await sendMessage();
+            document.getElementById('reqId').value = currId;
+        }
+
+        async function failNode(id) {
+            await fetch(`${API}/fail/${id}`, { method: 'POST' });
+            addLog(`Crashed ${id}`, 'error');
+            updateCluster();
+        }
+
+        async function recoverNode(id) {
+            await fetch(`${API}/recover/${id}`, { method: 'POST' });
+            addLog(`Recovered ${id} and started sync`, 'info');
+            updateCluster();
+        }
+
+        // --- Helpers ---
+
+        function generateReqId() {
+            lastReqId = document.getElementById('reqId').value;
+            const newId = `req-${Math.floor(Math.random()*10000)}`;
+            document.getElementById('reqId').value = newId;
+            return newId;
+        }
+
+        function addLog(msg, type) {
+            const log = document.getElementById('event-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const now = new Date().toLocaleTimeString();
+            entry.textContent = `[${now}] ${msg}`;
+            log.prepend(entry);
+        }
+
+        function createNodeCard(id) {
+            const div = document.createElement('div');
+            div.id = `card-${id}`;
+            div.className = 'node-card clickable';
+            div.setAttribute('onclick', `selectNode('${id}')`);
+            div.innerHTML = `
+                <div class="node-status">
+                    <span style="font-weight: 600;">${id}</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="role-badge" id="role-${id}">FOLLOWER</span>
+                        <div class="status-dot"></div>
+                    </div>
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8;">Msgs Store: <span id="msgs-${id}">0</span></div>
+                <div class="node-actions" onclick="event.stopPropagation()">
+                    <button class="btn-fail" onclick="failNode('${id}')">Crash</button>
+                    <button class="btn-recover" onclick="recoverNode('${id}')">Recover</button>
+                </div>
+            `;
+            return div;
+        }
+
+        // Init
+        generateReqId();
+        
+        // Enter key support
+        document.getElementById('content').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        setInterval(updateCluster, 1500);
+        setInterval(updateMetrics, 2000);
+        setInterval(updateMessages, 1500);
+        addLog("Distributed System Monitor Ready.", 'info');
+
+    </script>
+</body>
+</html>

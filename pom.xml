@@ -4,13 +4,12 @@
   <artifactId>ds-messaging-system</artifactId>
   <version>0.0.1-SNAPSHOT</version>
   <name>Distributed Messaging System</name>
-  <description>Fault-tolerant distributed messaging system for Distributed Systems module</description>
-
   <properties>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
+  <description>Fault-tolerant distributed messaging system for Distributed Systems module</description>
 
   <dependencies>
     <dependency>
@@ -38,6 +37,16 @@
       <artifactId>slf4j-simple</artifactId>
       <version>2.0.7</version>
     </dependency>
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.33</version>
+    </dependency>
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>5.0.1</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -64,6 +73,28 @@
               <goal>compile</goal>
               <goal>compile-custom</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      
+      <!-- Added build-helper to sync generated sources with IntelliJ -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.4.0</version>
+        <executions>
+          <execution>
+            <id>add-source</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.build.directory}/generated-sources/protobuf/java</source>
+                <source>${project.build.directory}/generated-sources/protobuf/grpc-java</source>
+              </sources>
+            </configuration>
           </execution>
         </executions>
       </plugin>

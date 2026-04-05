@@ -1,18 +1,17 @@
-# Distributed Messaging System - Time Synchronization
+# Distributed Messaging System
 
-This project implements a fault-tolerant distributed messaging system. This README focuses on the **Time Synchronization** component (Member 3).
+This project implements a fault-tolerant distributed messaging system. It includes components for **Consensus & Agreement** and **Time Synchronization**.
 
 ## Features
+
+### Consensus & Agreement
+- Demonstrates real-time message delivery across servers.
+- Utilizes the **Raft Consensus Algorithm** to ensure consistent data storage, leader election, and high availability against node failures.
+
+### Time Synchronization
 - **NTP-like Physical Clock Synchronization**: Nodes periodically sync with a server to calculate clock offset and network delay.
 - **Hybrid Logical Clocks (HLC)**: Combines physical time and logical counters to ensure causal ordering even when physical clocks drift.
 - **Message Reordering Buffer**: Buffers incoming messages and processes them in the correct HLC order.
-
-## Project Structure
-- `com.dsmessaging.sync.HybridLogicalClock`: Core HLC logic.
-- `com.dsmessaging.sync.ClockSync`: NTP-like offset calculation.
-- `com.dsmessaging.sync.MessageBuffer`: Reordering logic.
-- `com.dsmessaging.MessagingServer`: gRPC server endpoint.
-- `com.dsmessaging.MessagingClient`: gRPC client with periodic sync.
 
 ## Prerequisites
 - Java 11 or higher
@@ -20,28 +19,29 @@ This project implements a fault-tolerant distributed messaging system. This READ
 
 ## How to Run
 
-1. **Compile the project**:
+1. **Compilation**: Run the following command in the root folder to compile the project:
    ```bash
    mvn clean install
    ```
 
-2. **Start the Server**:
+2. **Run the Server (gRPC)**:
    ```bash
    java -cp target/ds-messaging-system-0.0.1-SNAPSHOT.jar com.dsmessaging.MessagingServer 50051 server-1
    ```
 
-3. **Start the Client**:
+3. **Run the Client (gRPC)**:
    ```bash
    java -cp target/ds-messaging-system-0.0.1-SNAPSHOT.jar com.dsmessaging.MessagingClient localhost 50051 client-1
    ```
 
-## Design Details (Member 3 Objectives)
+4. **Run Raft Simulation (Consensus Component)**:
+   To run the full Raft fault-tolerance and consensus simulation:
+   ```bash
+   mvn exec:java -Dexec.mainClass="com.dsmessaging.RaftSimulation"
+   ```
+   *Expected Output*: The console will output the nodes starting up, randomized leader election, simulated RPC message broadcast, and fail-over mechanisms.
 
-### 1. NTP-like Protocol
-We use a standard offset + delay calculation. Every 5 seconds, the client sends a `SyncRequest` to the server. By measuring the round-trip time and comparing timestamps, we calculate the estimated offset.
-
-### 2. Hybrid Logical Clocks
-Physical clocks alone are not enough due to potential clock skew. HLC ensure that if `Event A` happens before `Event B`, its timestamp will always be smaller, even if the nodes' physical clocks are slightly out of sync.
-
-### 3. Reordering Mechanism
-Messages are added to a `PriorityQueue` based on their HLC timestamps. We wait for a short period (500ms) before processing them to ensure that any messages delayed by the network have a chance to arrive and be inserted in the correct order.
+## Project Structure
+- `com.dsmessaging.sync.*`: Core HLC logic, ClockSync, MessageBuffer
+- `com.dsmessaging.raft.*`: Raft consensus algorithm, Leader election
+- `com.dsmessaging.MessagingServer` and `com.dsmessaging.MessagingClient`: gRPC endpoints

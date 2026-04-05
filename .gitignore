@@ -5,6 +5,11 @@ bin/
 .project
 .metadata/
 *.log
-.idea/verify_cluster.ps1
+.idea/
 classpath.txt
  
+ # Maven/Java build artifacts
+*.class
+
+# Local output files
+output.txt

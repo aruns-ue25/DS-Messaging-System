@@ -1,0 +1,75 @@
+package com.dsmessaging;
+
+import com.dsmessaging.model.Message;
+import com.dsmessaging.model.MessageStatus;
+import com.dsmessaging.server.ServerNode;
+import com.dsmessaging.service.MessagingSystem;
+
+public class RaftSimulation {
+
+    private static void sendToLeader(MessagingSystem system, Message msg) {
+        for (ServerNode server : system.getServers()) {
+            if (server.getRaftNode().getState() == com.dsmessaging.raft.NodeState.LEADER) {
+                System.out.println("Routing message to current LEADER: " + server.getServerId());
+                system.sendMessageToServer(server.getServerId(), msg);
+                return;
+            }
+        }
+        System.out.println("No leader found for message: " + msg.getMessageId());
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        MessagingSystem system = new MessagingSystem();
+
+        system.addServer("Server-1");
+        system.addServer("Server-2");
+        system.addServer("Server-3");
+
+        ServerNode s1 = system.getServer("Server-1");
+        ServerNode s2 = system.getServer("Server-2");
+        ServerNode s3 = system.getServer("Server-3");
+
+        s1.getRaftNode().setMessagingSystem(system);
+        s2.getRaftNode().setMessagingSystem(system);
+        s3.getRaftNode().setMessagingSystem(system);
+
+        System.out.println("--- Starting Nodes ---");
+        s1.activate();
+        s2.activate();
+        s3.activate();
+
+        // Wait for leader election
+        Thread.sleep(1500);
+
+        System.out.println("\n--- Sending Message to Current Leader ---");
+        Message msg1 = new Message("msg-1", "conv-sim", "Client", "System", "req-1", "Hello Raft!",
+                System.currentTimeMillis(), 1, MessageStatus.COMMITTED, System.currentTimeMillis());
+        sendToLeader(system, msg1);
+
+        Thread.sleep(1000);
+
+        System.out.println("\n--- Simulating Node Crash (Deactivating Server-1) ---");
+        s1.deactivate();
+
+        // Wait for potential new election
+        Thread.sleep(1500);
+
+        System.out.println("\n--- Sending another message to Current Leader ---");
+        Message msg2 = new Message("msg-2", "conv-sim", "Client", "System", "req-2", "Testing second message!",
+                System.currentTimeMillis(), 2, MessageStatus.COMMITTED, System.currentTimeMillis());
+        sendToLeader(system, msg2);
+
+        Thread.sleep(1000);
+
+        System.out.println("\n--- Recovering Server-1 ---");
+        s1.activate();
+
+        // Give time for catch up log replication
+        Thread.sleep(2000);
+
+        System.out.println("\n--- Final State ---");
+        system.displayAllServerMessages();
+
+        System.exit(0);
+    }
+}

@@ -161,11 +161,32 @@
         .log-warn { border-left-color: var(--warning); color: var(--warning); }
         .log-error { border-left-color: var(--danger); color: var(--danger); }
 
+        .quorum-banner {
+            display: none;
+            background: var(--danger);
+            color: white;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(0,0,0,0.2);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
     </style>
 </head>
 <body>
+
+    <div id="quorum-banner" class="quorum-banner">
+        ⚠️ QUORUM LOST — Active nodes: <span id="active-count">0</span> / Required: 2 — Writing and reading are suspended.
+    </div>
 
     <header>
         <div class="logo"><span>⚛</span> DS MESSAGING</div>
@@ -264,11 +285,41 @@
 
         // --- Core Functions ---
 
+        let wasQuorumLost = false;
+
         async function updateCluster() {
             try {
                 const res = await fetch(`${API}/cluster`);
-                const nodes = await res.json();
+                const data = await res.json();
                 
+                const nodes = data.nodes;
+                const quorumOk = data.quorumOk;
+                const activeCount = data.activeCount;
+
+                // Handle Quorum Banner
+                const banner = document.getElementById('quorum-banner');
+                const sendBtn = document.querySelector('.btn-send');
+                const activeSpan = document.getElementById('active-count');
+
+                if (!quorumOk) {
+                    banner.style.display = 'block';
+                    activeSpan.textContent = activeCount;
+                    sendBtn.disabled = true;
+                    sendBtn.style.opacity = '0.5';
+                    if (!wasQuorumLost) {
+                        addLog(`Quorum failure detected (Active: ${activeCount})`, 'error');
+                        wasQuorumLost = true;
+                    }
+                } else {
+                    banner.style.display = 'none';
+                    sendBtn.disabled = false;
+                    sendBtn.style.opacity = '1';
+                    if (wasQuorumLost) {
+                        addLog(`Quorum restored (Active: ${activeCount}). System operational.`, 'info');
+                        wasQuorumLost = false;
+                    }
+                }
+
                 const nodeList = document.getElementById('node-list');
                 let maxTerm = 0;
 
@@ -349,6 +400,16 @@
                 
                 const res = await fetch(url);
                 const msgs = await res.json();
+
+                if (!res.ok || msgs.error) {
+                    if (msgs.error === "QUORUM_NOT_MET") {
+                        // Silent fail for background poll during quorum loss
+                        return;
+                    }
+                    console.warn("Message update error:", msgs.error);
+                    return;
+                }
+
                 const container = document.getElementById('message-list');
                 const uniqueMsgs = new Map();
                 

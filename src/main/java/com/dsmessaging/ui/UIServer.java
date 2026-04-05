@@ -84,7 +84,10 @@ public class UIServer {
                     if (i < nodes.size() - 1) json.append(",");
                 }
                 json.append("]");
-                sendResponse(exchange, json.toString(), "application/json", 200);
+                String responseBody = "{\"nodes\":" + json.toString() + 
+                                     ",\"quorumOk\":" + cluster.isQuorumAvailable(2) + 
+                                     ",\"activeCount\":" + cluster.getActiveNodeCount() + "}";
+                sendResponse(exchange, responseBody, "application/json", 200);
             } catch (Exception e) {
                 logger.log(Level.SEVERE, "Error building cluster JSON", e);
                 sendResponse(exchange, "{\"error\":\"" + e.getMessage() + "\"}", "application/json", 500);
@@ -131,6 +134,12 @@ public class UIServer {
                     }
                 } else {
                     // Fallback: Perform a Quorum Read (R=2) from any active node
+                    if (!cluster.isQuorumAvailable(2)) {
+                        logger.warning("Quorum not met (required: 2, available: " + cluster.getActiveNodeCount() + ")");
+                        sendResponse(exchange, "{\"error\":\"QUORUM_NOT_MET\",\"active\":" + cluster.getActiveNodeCount() + "}", "application/json", 503);
+                        return;
+                    }
+
                     ServerNode activeNode = null;
                     for (ServerNode sn : cluster.getServers()) if (sn.isActive()) { activeNode = sn; break; }
                     
@@ -181,6 +190,12 @@ public class UIServer {
                 var request = new com.dsmessaging.model.ClientWriteRequest(convId, sender, receiver, content, reqId);
                 var session = new com.dsmessaging.model.ClientSession("ui-" + sender, sender);
                 
+                if (!cluster.isQuorumAvailable(2)) {
+                    logger.severe("Quorum not met (required: 2, available: " + cluster.getActiveNodeCount() + ")");
+                    sendResponse(exchange, "{\"error\":\"QUORUM_NOT_MET\",\"active\":" + cluster.getActiveNodeCount() + "}", "application/json", 503);
+                    return;
+                }
+
                 ServerNode coordinator = null;
                 for (ServerNode sn : cluster.getServers()) if (sn.isActive()) { coordinator = sn; break; }
                 

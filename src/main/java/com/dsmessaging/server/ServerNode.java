@@ -35,6 +35,8 @@ public class ServerNode implements PeerNode {
     private final List<PeerNode> peers;
     private final ConcurrentHashMap<String, AtomicInteger> conversationSequences;
 
+    private final com.dsmessaging.sync.MessageBuffer<Runnable> writeBuffer;
+
     public ServerNode(String serverId, MetricsCollector metrics) {
         this.serverId = serverId;
         this.active = true;
@@ -42,10 +44,11 @@ public class ServerNode implements PeerNode {
         this.raftNode = new com.dsmessaging.raft.RaftNode(serverId, this);
         this.hlc = new HybridLogicalClock(serverId);
         this.metrics = metrics;
-        this.messageStore = new MessageStore(metrics);
-        this.idempotencyStore = new IdempotencyStore();
+        this.messageStore = new MessageStore(metrics, serverId);
+        this.idempotencyStore = new IdempotencyStore(serverId);
         this.peers = new ArrayList<>();
         this.conversationSequences = new ConcurrentHashMap<>();
+        this.writeBuffer = new com.dsmessaging.sync.MessageBuffer<>(500, Runnable::run);
     }
 
     public HybridLogicalClock getHlc() {
@@ -101,22 +104,57 @@ public class ServerNode implements PeerNode {
                 request.getClientRequestId());
         IdempotencyRecord record = idempotencyStore.getRecord(key);
 
-        String messageId;
-        int commitVersion;
+        logger.info("--- Initial Write Request ---");
+        logger.info("Request ID: {}", request.getClientRequestId());
 
         if (record != null) {
             // Allow retrying if the last attempt failed (e.g., due to Quorum loss)
             if (record.getFinalStatus() == MessageStatus.FAILED) {
-                // TRUE IDEMPOTENCY: Reuse the original message ID! Do not remove the record.
-                messageId = record.getMessageId();
-                commitVersion = record.getCommitVersion();
+                // TRUE IDEMPOTENCY: Reuse the original message ID!
             } else {
                 metrics.duplicatesSuppressed.incrementAndGet();
                 if (record.getFinalStatus() == MessageStatus.COMMITTED) {
+                    logger.info("Duplicate Request Handled: {}", request.getClientRequestId());
+                    logger.info("Suppressed: true");
+                    logger.info("No additional write performed — returning original message {}", record.getMessageId());
                     return messageStore.getMessage(record.getMessageId());
                 }
                 throw new IllegalStateException("Message is still pending. Retry later.");
             }
+        }
+
+        // HLC Update: Member 3 requirement
+        HybridLogicalClock msgHlc = hlc.updateLocal();
+
+        java.util.concurrent.CompletableFuture<Message> future = new java.util.concurrent.CompletableFuture<>();
+        
+        writeBuffer.addItem(() -> {
+            try {
+                Message result = performActualWrite(request, session, msgHlc, startTime);
+                future.complete(result);
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            }
+        }, msgHlc);
+
+        try {
+            return future.get(10, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Write failed or timed out in reordering buffer: " + e.getMessage());
+        }
+    }
+
+    private Message performActualWrite(ClientWriteRequest request, ClientSession session, HybridLogicalClock msgHlc, long startTime) {
+        IdempotencyKey key = new IdempotencyKey(request.getConversationId(), request.getSenderId(),
+                request.getClientRequestId());
+        IdempotencyRecord existingRecord = idempotencyStore.getRecord(key);
+
+        String messageId;
+        int commitVersion;
+
+        if (existingRecord != null && existingRecord.getFinalStatus() == MessageStatus.FAILED) {
+            messageId = existingRecord.getMessageId();
+            commitVersion = existingRecord.getCommitVersion();
         } else {
             messageId = UUID.randomUUID().toString();
             AtomicInteger seq = conversationSequences.computeIfAbsent(request.getConversationId(),
@@ -128,19 +166,26 @@ public class ServerNode implements PeerNode {
                 System.currentTimeMillis());
         idempotencyStore.putRecord(key, pendingRecord);
 
+        // Member 3: Use HLC wall time for the message timestamp
         Message message = new Message(messageId, request.getConversationId(), request.getSenderId(),
                 request.getReceiverId(), request.getClientRequestId(), request.getContent(),
-                System.currentTimeMillis(), commitVersion, MessageStatus.PENDING, System.currentTimeMillis());
+                msgHlc.getWallTime(), commitVersion, MessageStatus.PENDING, msgHlc.getWallTime());
+
+        logger.info("--- Initial Write Request ---");
+        logger.info("Request ID: {}", request.getClientRequestId());
+        logger.info("Assigned HLC timestamp: {}", msgHlc.toString());
 
         int acks = 0;
         if (this.receiveReplicaWrite(message, key, pendingRecord)) {
             acks++;
+            logger.info("Ack from local node {}", serverId);
         }
 
         for (PeerNode peer : peers) {
             if (peer.isActive()) {
                 if (peer.receiveReplicaWrite(message, key, pendingRecord)) {
                     acks++;
+                    logger.info("Ack from peer node {}", peer.getPeerId());
                 }
             }
         }
@@ -148,7 +193,8 @@ public class ServerNode implements PeerNode {
         if (acks >= 2) {
             message.setStatus(MessageStatus.COMMITTED);
             this.commitMessage(messageId);
-            logger.info("QUORUM WRITE SUCCESSFUL (W=2) for message {} on coordinator {}", messageId, serverId);
+            logger.info("Quorum Write (W=2) Success! Version: {}", commitVersion);
+            logger.info("Message committed: {}", messageId);
 
             for (PeerNode peer : peers) {
                 if (peer.isActive()) {
@@ -158,6 +204,9 @@ public class ServerNode implements PeerNode {
 
             metrics.successfulQuorumWrites.incrementAndGet();
             metrics.recordWriteLatency(System.currentTimeMillis() - startTime);
+
+            pendingRecord.setFinalStatus(MessageStatus.COMMITTED);
+            idempotencyStore.putRecord(key, pendingRecord);
 
             session.updateLastCommittedWriteVersion(request.getConversationId(), commitVersion);
             session.updateLastSeenVersion(request.getConversationId(), commitVersion);
@@ -184,8 +233,7 @@ public class ServerNode implements PeerNode {
             
         idempotencyStore.putRecord(key, record);
         messageStore.saveMessage(message);
-        logger.info("REPLICA WRITE SAVED on node {}: Message ID={}, Content='{}'", serverId, message.getMessageId(),
-                message.getContent());
+        logger.info("Message stored in {}", serverId);
         return true;
     }
 
@@ -200,12 +248,15 @@ public class ServerNode implements PeerNode {
         Message msg = messageStore.getMessage(messageId);
         if (msg != null) {
             msg.setStatus(MessageStatus.COMMITTED);
+            messageStore.saveMessage(msg); // Persist message status update
+
             IdempotencyKey key = new IdempotencyKey(msg.getConversationId(), msg.getSenderId(),
                     msg.getClientRequestId());
             IdempotencyRecord rec = idempotencyStore.getRecord(key);
             if (rec != null) {
                 rec.setFinalStatus(MessageStatus.COMMITTED);
                 rec.setCommitVersion(msg.getCommitVersion());
+                idempotencyStore.putRecord(key, rec); // Persist idempotency status update
             }
         }
     }
@@ -249,8 +300,6 @@ public class ServerNode implements PeerNode {
         } else {
             metrics.successfulQuorumReads.incrementAndGet();
         }
-
-        metrics.successfulQuorumReads.incrementAndGet();
 
         int sessionMinVersion = Math.max(
                 session.getLastCommittedWriteVersion(conversationId),
@@ -296,29 +345,38 @@ public class ServerNode implements PeerNode {
         
         // 1. Sync Messages
         int localMax = messageStore.getMaxVersion(conversationId);
-        List<Message> missing = healthyPeer.messageStore.getMessagesBeforeVersion(conversationId, Integer.MAX_VALUE,
-                Integer.MAX_VALUE);
+        List<Message> missing = healthyPeer.messageStore.getLatestMessages(conversationId, Integer.MAX_VALUE);
+        int recoveredCount = 0;
+
+        logger.info("Synchronizing missed messages for {}...", serverId);
 
         for (Message m : missing) {
-            // Strict deduplication: Only add if not already present and it's a committed message
+            // Strict deduplication: Only add if not already present in OUR node view 
+            // and it's a committed message
             if (m.getCommitVersion() > localMax && m.getStatus() == MessageStatus.COMMITTED) {
+                // Double check by ID in our node-specific store
                 if (messageStore.getMessage(m.getMessageId()) == null) {
                     IdempotencyKey key = new IdempotencyKey(m.getConversationId(), m.getSenderId(), m.getClientRequestId());
                     IdempotencyRecord rec = new IdempotencyRecord(m.getMessageId(), m.getCommitVersion(),
                             MessageStatus.COMMITTED, m.getCreatedAt());
-                    receiveReplicaWrite(m, key, rec);
+                    
+                        // This will now correctly insert with OUR nodeId thanks to the new store logic
+                    messageStore.saveMessage(m);
+                    idempotencyStore.putRecord(key, rec);
+                    recoveredCount++;
                 }
             }
         }
 
-        // 2. Sync Idempotency Store (all records)
+        // 2. Sync Idempotency Store (all records from peer's node view)
         healthyPeer.idempotencyStore.getStore().forEach((key, record) -> {
             if (idempotencyStore.getRecord(key) == null) {
                 idempotencyStore.putRecord(key, record);
             }
         });
 
-        logger.info("Node {} successfully recovered from {}. Synced messages and idempotency state.", serverId, healthyPeer.getServerId());
+        logger.info("Recovered {} missing messages from replicas", recoveredCount);
+        logger.info("{} state updated successfully", serverId);
     }
 
     public void failNode() {

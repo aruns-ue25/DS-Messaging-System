@@ -14,7 +14,7 @@ public class DatabaseManager {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl("jdbc:mysql://localhost:3306/dsmessaging?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC");
         config.setUsername("root");
-        config.setPassword("Password123@#$");
+        config.setPassword("ArunS1573@DMS");
         config.setMaximumPoolSize(10);
         config.setMinimumIdle(2);
         config.setIdleTimeout(30000);

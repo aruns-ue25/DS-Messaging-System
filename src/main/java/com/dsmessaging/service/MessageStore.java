@@ -14,32 +14,35 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MessageStore {
     private final MetricsCollector metrics;
+    private final String nodeId;
     
     // Simulating explicitly RAM "Recent Message Cache" (Preserved from V3.1)
     private final Map<String, List<Message>> recentCache = new ConcurrentHashMap<>();
     private static final int CACHE_LIMIT = 50;
 
-    public MessageStore(MetricsCollector metrics) {
+    public MessageStore(MetricsCollector metrics, String nodeId) {
         this.metrics = metrics;
+        this.nodeId = nodeId;
     }
 
     public synchronized void saveMessage(Message message) {
-        String sql = "INSERT INTO messages (id, conversation_id, sender_id, receiver_id, content, commit_version, created_at, status, client_request_id) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        String sql = "INSERT INTO messages (id, node_id, conversation_id, sender_id, receiver_id, content, commit_version, created_at, status, client_request_id) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                      "ON DUPLICATE KEY UPDATE content = VALUES(content), commit_version = VALUES(commit_version), status = VALUES(status)";
         
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, message.getMessageId());
-            stmt.setString(2, message.getConversationId());
-            stmt.setString(3, message.getSenderId());
-            stmt.setString(4, message.getReceiverId());
-            stmt.setString(5, message.getContent());
-            stmt.setInt(6, message.getCommitVersion());
-            stmt.setLong(7, message.getCreatedAt());
-            stmt.setString(8, message.getStatus() != null ? message.getStatus().name() : null);
-            stmt.setString(9, message.getClientRequestId());
+            stmt.setString(2, nodeId);
+            stmt.setString(3, message.getConversationId());
+            stmt.setString(4, message.getSenderId());
+            stmt.setString(5, message.getReceiverId());
+            stmt.setString(6, message.getContent());
+            stmt.setInt(7, message.getCommitVersion());
+            stmt.setLong(8, message.getCreatedAt());
+            stmt.setString(9, message.getStatus() != null ? message.getStatus().name() : null);
+            stmt.setString(10, message.getClientRequestId());
             
             stmt.executeUpdate();
             
@@ -56,11 +59,12 @@ public class MessageStore {
     }
 
     public Message getMessage(String messageId) {
-        String sql = "SELECT * FROM messages WHERE id = ?";
+        String sql = "SELECT * FROM messages WHERE id = ? AND node_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, messageId);
+            stmt.setString(2, nodeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return mapRowToMessage(rs);
@@ -73,11 +77,12 @@ public class MessageStore {
     }
 
     public int getMaxVersion(String conversationId) {
-        String sql = "SELECT MAX(commit_version) FROM messages WHERE conversation_id = ?";
+        String sql = "SELECT MAX(commit_version) FROM messages WHERE conversation_id = ? AND node_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, conversationId);
+            stmt.setString(2, nodeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return rs.getInt(1);
@@ -109,14 +114,15 @@ public class MessageStore {
         
         // Cache miss -> Fetch from disk
         metrics.cacheMisses.incrementAndGet();
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY commit_version DESC LIMIT ?";
+        String sql = "SELECT * FROM messages WHERE conversation_id = ? AND node_id = ? ORDER BY commit_version DESC LIMIT ?";
         List<Message> results = new ArrayList<>();
         
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, conversationId);
-            stmt.setInt(2, limit);
+            stmt.setString(2, nodeId);
+            stmt.setInt(3, limit);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     results.add(0, mapRowToMessage(rs)); // Ensure it's in ascending chronological order for the client
@@ -130,15 +136,16 @@ public class MessageStore {
 
     public List<Message> getMessagesBeforeVersion(String conversationId, int beforeVersion, int limit) {
         // Pagination typically bypasses the latest cache to test DB indexes
-        String sql = "SELECT * FROM messages WHERE conversation_id = ? AND commit_version < ? ORDER BY commit_version DESC LIMIT ?";
+        String sql = "SELECT * FROM messages WHERE conversation_id = ? AND node_id = ? AND commit_version < ? ORDER BY commit_version DESC LIMIT ?";
         List<Message> results = new ArrayList<>();
         
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             
             stmt.setString(1, conversationId);
-            stmt.setInt(2, beforeVersion);
-            stmt.setInt(3, limit);
+            stmt.setString(2, nodeId);
+            stmt.setInt(3, beforeVersion);
+            stmt.setInt(4, limit);
             
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -152,12 +159,14 @@ public class MessageStore {
     }
     
     public int getStorageMessageCount() {
-        String sql = "SELECT COUNT(*) FROM messages";
+        String sql = "SELECT COUNT(*) FROM messages WHERE node_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            if (rs.next()) {
-                return rs.getInt(1);
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, nodeId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
             }
         } catch (SQLException e) {
             System.err.println("Database error fetching generic message count: " + e.getMessage());
@@ -166,10 +175,11 @@ public class MessageStore {
     }
     
     private int getCountByConv(String conversationId) {
-        String sql = "SELECT COUNT(*) FROM messages WHERE conversation_id = ?";
+        String sql = "SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND node_id = ?";
         try (Connection conn = DatabaseManager.getInstance().getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, conversationId);
+            stmt.setString(2, nodeId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
                     return rs.getInt(1);

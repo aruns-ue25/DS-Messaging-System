@@ -43,6 +43,20 @@ public class MessagingSystem {
         }
     }
 
+    public int getActiveNodeCount() {
+        int count = 0;
+        for (ServerNode node : servers) {
+            if (node.isActive()) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public boolean isQuorumAvailable(int requiredQuorum) {
+        return getActiveNodeCount() >= requiredQuorum;
+    }
+
     private ServerNode getActiveNode() {
         for (ServerNode node : servers) {
             if (node.isActive()) {

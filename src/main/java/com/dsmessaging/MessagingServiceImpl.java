@@ -29,20 +29,13 @@ public class MessagingServiceImpl extends com.dsmessaging.grpc.MessagingServiceG
 
     private final HybridLogicalClock hlc;
     private final ClockSync clockSync;
-    private final MessageBuffer messageBuffer;
     private final ServerNode serverNode;
-    private final java.util.concurrent.ConcurrentHashMap<String, ClientSession> sessions;
-
+    private final java.util.concurrent.ConcurrentHashMap<String, com.dsmessaging.model.ClientSession> sessions;
     public MessagingServiceImpl(HybridLogicalClock hlc, ClockSync clockSync, ServerNode serverNode) {
         this.hlc = hlc;
         this.clockSync = clockSync;
         this.serverNode = serverNode;
         this.sessions = new java.util.concurrent.ConcurrentHashMap<>();
-        
-        // 500ms wait period for reordering (Member 3 requirement)
-        this.messageBuffer = new MessageBuffer(500, content -> {
-            logger.info("REORDERED MESSAGE PROCESSED: {}", content);
-        });
     }
 
     private ClientSession getOrCreateSession(String senderId) {
@@ -58,10 +51,6 @@ public class MessagingServiceImpl extends com.dsmessaging.grpc.MessagingServiceG
         
         logger.info("Received message from {}: '{}' with HLC {}", 
                 request.getSenderId(), request.getContent(), ts);
-
-        // Add to buffer for reordering (Member 3 requirement)
-        messageBuffer.addMessage(request.getContent(), new HybridLogicalClock(
-                ts.getWallTime(), ts.getLogicalCounter(), ts.getNodeId()));
 
         try {
             // Bridge to Quorum logic (Member 2 requirement)
